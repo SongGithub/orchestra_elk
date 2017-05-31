@@ -1,0 +1,58 @@
+version: '2'
+
+volumes:
+  postgres_data_dev: {}
+  postgres_backup_dev: {}
+
+services:
+  elasticsearch:
+    build: elasticsearch/
+    hostname: elastic
+    domainname: elk-local
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - POSTGRES_USER=replicants
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true    
+      - "ES_JAVA_OPTS=-Xms1G -Xmx1G"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1      
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+  
+  kibana:
+    build: kibana/
+    hostname: kibana
+    domainname: elk-local
+    ports:
+      - "5601:5601"
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana.config
+    depends_on:
+      - elasticsearch
+
+  logstash:
+    build: logstash/
+    hostname: logstash
+    domainname: elk-local
+    command: logstash -e 'input { stdin {  } http { port => 8080 } } output { elasticsearch { hosts => [ 'elasticsearch' ] index => "elk-data-%{+YYYY.MM.dd}" } stdout { } }'
+    # image: logstash:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - elasticsearch
+    
+  postgres:
+    build: postgres/
+    volumes: 
+      - postgres_data_dev:/var/lib/postgresql/data
+      - postgres_backup_dev:/backups
+    environment:
+      - POSTGRES_USER=replicants
+
